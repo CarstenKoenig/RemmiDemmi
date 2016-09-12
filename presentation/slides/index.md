@@ -48,32 +48,40 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
 
 ### Begriffe
 
-- **Aggregate**  = das Domänen-Objekt für das wir uns interessieren (Konto)
-- **Event**      = beschreibt eine Änderung an einem Aggregat (Ein-/Auszahlungen)
+- **Aggregate**  = das Domänen-Objekt für das wir uns interessieren (*Konto*)
+- **Event**      = beschreibt eine erfolgte Änderung an einem Aggregat (*Ein-/Auszahlungen*)
 - **Stream**     = Abfolge von Ereignissen eines bestimmten Aggregats
-- **Source**     = Verwaltet die Streams der einzelnen Aggregate
 - **Projektion** = Berechnen eines Zustands aus den Ereignissen eines Aggregats
+- **Snapshot**   = gespeicherter Zustand
 
 ---
 
 #### Heute geht es um ...
 
-Wie bekomme ich **Zustand** aus **Ereignissen**?
+- Wie bekomme ich **Zustand** aus **Ereignissen**?
+- Wie mit **Snapshots** umgehen?
 
 ***
 
 ### Szenario
 
-Filme (Titel, Genre, Laufzeit) und Benutzerbewertungen
+![Project X](./images/ProjektX.jpg)
+
+- Titel: *Project X*
+- Genre: *Comedy*
+- Laufzeit: *88min*
+- Bewertung: *2*
+
+(Quelle: [IMDb](http://www.imdb.com/title/tt1636826/?ref_=nv_sr_1))
 
 ---
 
 #### Model
 
     type Ereignisse =
-        | FilmAngelegt        of Titel * Genre
-        | LaufzeitHinzugefügt of Laufzeit
-        | Bewertet            of Bewerter * Sterne
+        | FilmAngelegt         of Titel * Genre
+        | LaufzeitHinzugefuegt of Laufzeit
+        | Bewertet             of Bewerter * Sterne
 		
     type Sterne = 
         | EinStern 
@@ -90,7 +98,7 @@ Filme (Titel, Genre, Laufzeit) und Benutzerbewertungen
 
 ---
 
-#### Ziel-Projektion
+#### Ziel
 
     type Film =
         {
@@ -101,81 +109,130 @@ Filme (Titel, Genre, Laufzeit) und Benutzerbewertungen
             AnzahlBewertungen : int
         }
 
-***
-
-### direkter Ansatz
-
-rekursiv die Ereignisse durchlaufen
-
 ---
 
 # DEMO
 
----
-
-#### Beispiel
-
-    let titel (evs : Ereignisse list) : Titel = 
-        let rec letzterTitel aktTitel =
-            function
-            | []                          -> aktTitel
-            | Angelegt (_,t)       :: evs -> letzterTitel t evs
-            | TitelAktuallisiert t :: evs -> letzterTitel t evs
-            | _                    :: evs -> letzterTitel aktTitel evs
-        letzterTitel (Titel "---") evs
-
----
-
-### Nachteile
-
-- Code-Wiederholung und direkte Rekursion
-- Ereignisse werden mehrfach durchlaufen
-- `bewertungen` umfasst eigentlich `anzahlBewertungen`
-
 ***
 
-## Fold
+## warum nicht *LINQ*?
 
-![Fold](./images/foldl.png)
+d.h. Funktionen aus `Seq` bzw. `List` Modul benutzen
+
+	let bewertung =
+		beispielEvents
+		|> Seq.choose (function Bewertet (_,b) -> Some (decimal b.Int) | _ -> None)
+		|> Seq.average
+
 
 ---
 
-#### Muster ...
+## Einschub: Folds
 
-	let rec fold f acc xs = 
+---
+
+    let rec length (xs : 'a list) =
+		match xs with
+		| []      -> 0
+		| (_::xs) -> 1 + length xs
+
+---
+
+    let rec sum (xs : int list) =
+		match xs with
+		| []      -> 0
+		| (x::xs) -> x + sum xs
+
+
+---
+
+    let rec map (f : 'a -> 'b) (xs : 'a list) =
+		match xs with
+		| []      -> []
+		| (x::xs) -> f x :: map f xs
+		
+---
+
+## Muster
+
+![FoldR](./images/foldr.png)
+
+- Ersetze alle *cons* durch eine Funktion
+- Ersetze `[]` durch einen passenden Wert
+
+---
+
+## Code
+
+	let rec foldr f acc xs = 
 		match xs with
 		| []      -> acc
-		| (x::xs) -> fold f (f acc x) xs
-
-	fold f initial ...
+		| (x::xs) -> f x (foldr f xs)
 
 ---
 
-# DEMO
+## Universelle Eigenschaft
+
+Jede Funktion `g` der Form
+
+     g []      = init
+	 g (x::xs) = f x (g xs)
+
+kann durch
+
+     g = foldr f init
+	 
+dargestellt werden	 
+
+---
+
+## LeftFold
+
+![FoldL](./images/foldl.png)
+
+	let rec foldl f acc xs = 
+		match xs with
+		| []      -> acc
+		| (x::xs) -> foldl f (f x acc) x
+
+---
+
+## In F#
+
+als
+
+- `Seq.foldBack` bzw. `List.foldBack`
+- `Seq.fold` bzw. `List.fold`
+
+---
+
+## noch nicht genug?
+
+Folds können selbst *generalisiert* werden ... **Catamorphisms**
+
+Meijer, Fokkinga, Paterson - [**Functional Programming with Bananas, Lenses,
+Envelopes and Barbed Wire**](http://eprints.eemcs.utwente.nl/7281/01/db-utwente-40501F46.pdf)
 
 ---
 
 #### Beispiel
 
-    let bewertung : Ereignisse seq -> decimal = 
-        Seq.fold 
-            (fun (wert, anzahl) ->
-                function
-                | Bewertet (_,EinStern)   -> (wert+1, anzahl+1)
-                | Bewertet (_,ZweiSterne) -> (wert+2, anzahl+1)
-                | Bewertet (_,DreiSterne) -> (wert+3, anzahl+1)
-                | _                       -> (wert, anzahl))
-            (0,0)
-        >> function
-            | wert, anzahl when anzahl > 0 -> 
-                decimal wert / decimal anzahl
-            | _ -> 0m
+	let titelRec (evs : Ereignisse list) : Titel = 
+		let rec letzterTitel aktTitel =
+			function
+			| []                        -> aktTitel
+			| FilmAngelegt (t,_) :: evs -> letzterTitel t evs
+			| _                  :: evs -> letzterTitel aktTitel evs
+		letzterTitel (Titel "---") evs
+
 ---
 
-### Immer noch...
-
-- Ereignisse werden mehrfach durchlaufen
-- `bewertungen` beinhaltet eigentlich `anzahlBewertungen`
+	let titelFold (evs : Ereignisse seq) : Titel = 
+		let updateTitel aktTitel =
+			function
+			| FilmAngelegt (t,_) -> t
+			| _                  -> aktTitel
+		Seq.fold updateTitel (Titel "---") evs
 
 ***
 
