@@ -8,12 +8,16 @@
 
 ##
 
-## Eventsourcing mit F#
+# Eventsourcing mit F#
 Carsten König
 
 ***
 
-### Was ist Eventsourcing
+# Was ist Eventsourcing
+
+---
+
+## Eventsourcing
 
 nicht der **Zustand**
 
@@ -23,11 +27,11 @@ die zu diesem Zustand geführt haben werden gespeichert.
 
 ---
 
-### Beispiel Konto
+## Beispiel Konto
 
 ---
 
-#### Anstatt
+## Anstatt
 
 Speichern des aktuellen **Zustands = Guthaben**
 
@@ -35,7 +39,7 @@ Speichern des aktuellen **Zustands = Guthaben**
 
 ---
 
-#### Ereignisse
+## Ereignisse
 
 Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
 
@@ -46,7 +50,7 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
 
 ---
 
-### Begriffe
+## Begriffe
 
 - **Aggregate**  = das Domänen-Objekt für das wir uns interessieren (*Konto*)
 - **Event**      = beschreibt eine erfolgte Änderung an einem Aggregat (*Ein-/Auszahlungen*)
@@ -56,14 +60,16 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
 
 ---
 
-#### Heute geht es um ...
+## Heute geht es um ...
 
 - Wie bekomme ich **Zustand** aus **Ereignissen**?
 - Wie mit **Snapshots** umgehen?
 
 ***
 
-### Szenario
+# Szenario
+
+---
 
 ![Project X](./images/ProjektX.jpg)
 
@@ -76,7 +82,7 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
 
 ---
 
-#### Model
+## Model
 
     type Ereignisse =
         | FilmAngelegt         of Titel * Genre
@@ -90,7 +96,7 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
 		
 ---
 
-#### Zustand
+## Zustand
 
 - Was ist der **Titel** des Films?
 - Wie sieht die **Durchschnittsbewertung** aus?
@@ -98,7 +104,7 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
 
 ---
 
-#### Ziel
+## Ziel
 
     type Film =
         {
@@ -111,9 +117,9 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
 
 ---
 
-# DEMO
-
 ***
+
+' sollte ich vermutlich weglassen
 
 ## warum nicht *LINQ*?
 
@@ -125,9 +131,9 @@ d.h. Funktionen aus `Seq` bzw. `List` Modul benutzen
 		|> Seq.average
 
 
----
+***
 
-## Einschub: Folds
+# Einschub - Folds
 
 ---
 
@@ -151,9 +157,69 @@ d.h. Funktionen aus `Seq` bzw. `List` Modul benutzen
 		| []      -> []
 		| (x::xs) -> f x :: map f xs
 		
----
+---		
 
 ## Muster
+
+    let rec F (xs : 'a list) =
+		match xs with
+		| []      -> init
+		| (x::xs) -> f x (F xs)
+		
+mit
+
+    init : 's
+	F : 'a list -> 's
+	f : 'a -> 's -> 's
+
+---		
+
+## length
+
+    let rec length (xs : 'a list) =
+		match xs with
+		| []      -> init
+		| (x::xs) -> f x (length xs)
+		
+mit
+
+    's ~ int
+    init = 0
+	f x s = 1 + s
+
+---		
+
+## sum
+
+    let rec sum (xs : int list) =
+		match xs with
+		| []      -> init
+		| (x::xs) -> f x (sum xs)
+		
+mit
+
+    's ~ int
+    init = 0
+	f x s = x + s
+
+---		
+
+## map
+
+    let rec map (g : 'a -> 'b) (xs : 'a list) =
+		match xs with
+		| []      -> init
+		| (x::xs) -> f x (map g xs)
+		
+mit
+
+    's ~ 'b list
+    init = []
+	f x s = g x :: s
+
+---
+
+## FoldR
 
 ![FoldR](./images/foldr.png)
 
@@ -164,9 +230,9 @@ d.h. Funktionen aus `Seq` bzw. `List` Modul benutzen
 
 ## Code
 
-	let rec foldr f acc xs = 
+	let rec foldr f init xs = 
 		match xs with
-		| []      -> acc
+		| []      -> init
 		| (x::xs) -> f x (foldr f xs)
 
 ---
@@ -206,67 +272,56 @@ als
 
 ---
 
+### Beispiel
+
+	let bewertungFold (evs : Ereignisse seq) =
+		let zaehle (anz, sum) =
+			function
+			| Bewertet (_, b) -> (anz + 1, sum + decimal b.Int)
+			| _               -> (anz, sum)
+		Seq.fold zaehle (0, 0m) evs
+		|> (fun (anz, sum) ->
+			if anz > 0 then
+				sum / decimal anz
+			else
+                0m)
+				
+' zeigt warum Proj für den Funktor eine gute Idee ist				
+				
+---
+
 ## noch nicht genug?
 
 Folds können selbst *generalisiert* werden ... **Catamorphisms**
 
-Meijer, Fokkinga, Paterson - [**Functional Programming with Bananas, Lenses,
-Envelopes and Barbed Wire**](http://eprints.eemcs.utwente.nl/7281/01/db-utwente-40501F46.pdf)
+![Functional Programming with Bananas, Lenses, Envelopes and Barbed Wire](./images/Bananas.png)
 
----
-
-#### Beispiel
-
-	let titelRec (evs : Ereignisse list) : Titel = 
-		let rec letzterTitel aktTitel =
-			function
-			| []                        -> aktTitel
-			| FilmAngelegt (t,_) :: evs -> letzterTitel t evs
-			| _                  :: evs -> letzterTitel aktTitel evs
-		letzterTitel (Titel "---") evs
-
----
-
-	let titelFold (evs : Ereignisse seq) : Titel = 
-		let updateTitel aktTitel =
-			function
-			| FilmAngelegt (t,_) -> t
-			| _                  -> aktTitel
-		Seq.fold updateTitel (Titel "---") evs
+[Meijer, Fokkinga, Paterson (1991)](http://eprints.eemcs.utwente.nl/7281/01/db-utwente-40501F46.pdf)
 
 ***
 
-## Projektionen
+# Projektionen
 
 ---
 
-#### Muster ...
+### Folds abstrahieren
 
-        Seq.fold 
-            foldFun
-            init
-	    >> proj
-
----
-
-#### neue Abstraktion:
-
-	type Projection<'s,'event,'result> = {
-		Fold : 's -> 'event -> 's
-		Proj : 's -> 'result
-		Init : 's
+	type Projection<'snap,'event,'result> = {
+		Fold : 'snap -> 'event -> 'snap
+		Proj : 'snap -> 'result
+		Init : 'snap
 
 ---
 
-#### geändertes Interface
+### Interface
 
-	type IEventStream =
-		abstract Add       : event:'event -> unit
-		abstract Read      : p:Projection<'s,'e,'r> -> upper:VersionBound -> 'r
+	type IEventStream<'event> =
+		// ...
+		abstract Read : p:Projection<'snap,'event,'res> -> upper:VersionBound -> 'res
 
 ---
 
-#### Kombinatoren
+### Kombinatoren
 
     let createP f i p : Projection<_,_,_> =
         { Fold = f
