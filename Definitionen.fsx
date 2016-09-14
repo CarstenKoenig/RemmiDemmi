@@ -22,10 +22,21 @@ type VersionBound =
         | Limit v -> string v
 
 
-type Projection<'s,'event,'result> = {
-    Fold : 's -> 'event * AggregateVersion -> 's
-    Proj : 's -> 'result
-    Init : 's
+type MetaData = {
+    Id        : AggregateId
+    Version   : AggregateVersion
+    }
+
+type WithMeta<'event> = {
+    Event : 'event
+    Meta  : MetaData
+    }
+
+
+type Projection<'snap, 'event, 'result> = {
+    Fold : 'snap -> WithMeta<'event> -> 'snap
+    Proj : 'snap -> 'result
+    Init : 'snap
     }
 
 
@@ -36,15 +47,15 @@ type Snapshot<'s> = {
     }
 
 
-type IEventStream =
+type IEventStream<'event> =
     abstract Add           : event:'event -> unit
-    abstract TakeSnapshot  : p:Projection<'s,'e,'r> -> upper:VersionBound -> unit
-    abstract Read          : p:Projection<'s,'e,'r> -> upper:VersionBound -> 'r
+    abstract TakeSnapshot  : p:Projection<'snap,'event,'res> -> upper:VersionBound -> unit
+    abstract Read          : p:Projection<'snap,'event,'res> -> upper:VersionBound -> 'res
     abstract Events        : unit -> 'event seq
 
 
 type IEventSource =
-    abstract GetStream : id:AggregateId -> IEventStream
+    abstract GetStream : id:AggregateId -> IEventStream<'event>
 
 
 type Pair<'a,'b> = { 
@@ -63,10 +74,11 @@ type Summe<'label,'a> = Summe of 'a
 
 module Projektionen =
 
-    let createP f i p : Projection<_,_,_> =
-        { Fold = f
-        ; Init = i
-        ; Proj = p }
+    let createP f i p : Projection<_,_,_> = {
+        Fold = fun snap withMeta -> f snap withMeta.Event
+        Init = i
+        Proj = p
+        }
 
 
     let fmapP 
@@ -93,16 +105,16 @@ module Projektionen =
             Proj = function 
                 | { First = sA; Second = sB } -> 
                     (pa.Proj sA, pb.Proj sB)
-            Fold = fun pair (ev, ver) ->
+            Fold = fun pair ev ->
                 match pair with
                 | { First = sA; FirstVer = verA; Second = sB; SecondVer = verB } -> 
                     let fst = 
-                        if ver > verA
-                        then pa.Fold sA (ev, ver)
+                        if ev.Meta.Version > verA
+                        then pa.Fold sA ev
                         else sA
                     let snd = 
-                        if ver > verB
-                        then pb.Fold sB (ev, ver)
+                        if ev.Meta.Version > verB
+                        then pb.Fold sB ev
                         else sB
                     in { pair with First = fst; Second = snd }
         }
@@ -136,7 +148,7 @@ module Projektionen =
             | Some _ -> opt
             | None   -> alt
         createP 
-            (fun opt (ev,_) -> opt |> orElse (select ev))
+            (fun opt ev -> opt |> orElse (select ev))
             None
             (function Some r -> r | None -> defResult)
 
@@ -147,7 +159,7 @@ module Projektionen =
             | Some _ -> alt
             | None   -> opt
         createP 
-            (fun opt (ev,_) -> opt |> orElse (select ev))
+            (fun opt ev -> opt |> orElse (select ev))
             (Some defResult)
             Option.get
 
@@ -162,7 +174,7 @@ module Projektionen =
             | Some alt -> Some (Labeled alt)
             | None     -> opt
         createP 
-            (fun opt (ev,_) -> opt |> orElse (select ev))
+            (fun opt ev -> opt |> orElse (select ev))
             (Some (Labeled defResult))
             (Option.get >> (fun (Labeled v) -> v))
 
@@ -170,9 +182,9 @@ module Projektionen =
     let inline sumByP 
         (label : 'label) 
         (select : 'event -> 'num option) 
-        : Projection<Summe<'label,'num>,_,'num> =
+        : Projection<Summe<'label,'num>, 'event, 'num> =
         createP
-            (fun (Summe sum) (ev,_) ->
+            (fun (Summe sum) ev ->
                 match select ev with
                 | Some nr -> Summe (sum + nr)
                 | None    -> Summe sum)
@@ -183,7 +195,7 @@ module Projektionen =
     let countByP 
         (label : 'label)
         (select : 'event -> bool)
-        : Projection<Summe<'label,int>,_,int> =
+        : Projection<Summe<'label,int>, 'event, int> =
         let toNum = 
             function 
             | true -> Some 1 

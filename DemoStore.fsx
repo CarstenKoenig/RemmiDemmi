@@ -82,11 +82,19 @@ module EventStore =
         |> function Some r -> r.Version | None -> 0
 
 
-    let private enumEvents (id:AggregateId) (lower:VersionBound, upper:VersionBound) : ('event * AggregateVersion) seq * AggregateVersion =
+    let private enumEvents (id:AggregateId) (lower:VersionBound, upper:VersionBound) : WithMeta<'event> seq * AggregateVersion =
         let events = aggregateEvents (lower,upper) id |> Seq.toArray
         let version = if events.Length = 0 then 0 else (Seq.last events).Version
         // (filtered |> Seq.map (fun r -> printfn "reading %d" r.Version; unbox r.Event, r.Version), version)
-        (events |> Seq.map (fun r -> unbox r.Event, r.Version), version)
+        let withMeta (r : Record<'event>) = {
+            Meta =
+              {
+                Id = r.AggregateId
+                Version = r.Version
+              }
+            Event = unbox r.Event
+            }
+        (events |> Seq.map withMeta, version)
 
 
     let private addEvent (id : AggregateId) (ev : 'event) =
@@ -157,11 +165,11 @@ module EventStore =
 
 
     let private getStream (id:AggregateId) = 
-        { new IEventStream with
+        { new IEventStream<'event> with
 
             member __.Add (event:'event) =
                 addEvent id event
-            member __.Read(p: Projection<'s,'e,'r>) (upper: VersionBound): 'r = 
+            member __.Read(p: Projection<'s,'event,'r>) (upper: VersionBound): 'r = 
                 let (snapshot, _, _) = foldSnapshot p id upper
                 snapshot |> p.Proj
             member __.TakeSnapshot (p: Projection<_,_,_>) (upper: VersionBound) =
@@ -170,7 +178,7 @@ module EventStore =
             member __.Events () =
                 enumEvents id (NoBound, NoBound)
                 |> fst
-                |> Seq.map fst
+                |> Seq.map (fun withMeta -> withMeta.Event)
         }
 
 

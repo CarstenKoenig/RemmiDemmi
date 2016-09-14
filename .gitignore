@@ -246,3 +246,4 @@ presentation/output/
 
 *.zip
 *.dll
+.#*

@@ -85,14 +85,14 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
 ## Model
 
     type Ereignisse =
-        | FilmAngelegt         of Titel * Genre
-        | LaufzeitHinzugefuegt of Laufzeit
-        | Bewertet             of Bewerter * Sterne
+	  | FilmAngelegt         of Titel * Genre
+	  | LaufzeitHinzugefuegt of Laufzeit
+	  | Bewertet             of Bewerter * Sterne
 		
     type Sterne = 
-        | EinStern 
-        | ZweiSterne 
-        | DreiSterne
+	  | EinStern 
+	  | ZweiSterne 
+	  | DreiSterne
 		
 ---
 
@@ -107,13 +107,13 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
 ## Ziel
 
     type Film =
-        {
-            Titel : Titel
-            Genre : Genre
-            Laufzeit : Laufzeit
-            Bewertung : decimal
-            AnzahlBewertungen : int
-        }
+	  {
+	    Titel : Titel
+		Genre : Genre
+		Laufzeit : Laufzeit
+		Bewertung : decimal
+		AnzahlBewertungen : int
+	  }
 
 ---
 
@@ -126,9 +126,9 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
 d.h. Funktionen aus `Seq` bzw. `List` Modul benutzen
 
 	let bewertung =
-		beispielEvents
-		|> Seq.choose (function Bewertet (_,b) -> Some (decimal b.Int) | _ -> None)
-		|> Seq.average
+	  beispielEvents
+	  |> Seq.choose (function Bewertet (_,b) -> Some (decimal b.Int) | _ -> None)
+	  |> Seq.average
 
 
 ***
@@ -138,33 +138,33 @@ d.h. Funktionen aus `Seq` bzw. `List` Modul benutzen
 ---
 
     let rec length (xs : 'a list) =
-		match xs with
-		| []      -> 0
-		| (_::xs) -> 1 + length xs
+	  match xs with
+	  | []      -> 0
+	  | (_::xs) -> 1 + length xs
 
 ---
 
     let rec sum (xs : int list) =
-		match xs with
-		| []      -> 0
-		| (x::xs) -> x + sum xs
+	  match xs with
+	  | []      -> 0
+	  | (x::xs) -> x + sum xs
 
 
 ---
 
     let rec map (f : 'a -> 'b) (xs : 'a list) =
-		match xs with
-		| []      -> []
-		| (x::xs) -> f x :: map f xs
+	  match xs with
+	  | []      -> []
+	  | (x::xs) -> f x :: map f xs
 		
 ---		
 
 ## Muster
 
     let rec F (xs : 'a list) =
-		match xs with
-		| []      -> init
-		| (x::xs) -> f x (F xs)
+	  match xs with
+	  | []      -> init
+	  | (x::xs) -> f x (F xs)
 		
 mit
 
@@ -177,9 +177,9 @@ mit
 ## length
 
     let rec length (xs : 'a list) =
-		match xs with
-		| []      -> init
-		| (x::xs) -> f x (length xs)
+	  match xs with
+	  | []      -> init
+	  | (x::xs) -> f x (length xs)
 		
 mit
 
@@ -192,9 +192,9 @@ mit
 ## sum
 
     let rec sum (xs : int list) =
-		match xs with
-		| []      -> init
-		| (x::xs) -> f x (sum xs)
+	  match xs with
+	  | []      -> init
+	  | (x::xs) -> f x (sum xs)
 		
 mit
 
@@ -207,9 +207,9 @@ mit
 ## map
 
     let rec map (g : 'a -> 'b) (xs : 'a list) =
-		match xs with
-		| []      -> init
-		| (x::xs) -> f x (map g xs)
+	  match xs with
+	  | []      -> init
+	  | (x::xs) -> f x (map g xs)
 		
 mit
 
@@ -231,9 +231,9 @@ mit
 ## Code
 
 	let rec foldr f init xs = 
-		match xs with
-		| []      -> init
-		| (x::xs) -> f x (foldr f xs)
+	  match xs with
+	  | []      -> init
+	  | (x::xs) -> f x (foldr f xs)
 
 ---
 
@@ -257,9 +257,9 @@ dargestellt werden
 ![FoldL](./images/foldl.png)
 
 	let rec foldl f acc xs = 
-		match xs with
-		| []      -> acc
-		| (x::xs) -> foldl f (f x acc) x
+	  match xs with
+	  | []      -> acc
+	  | (x::xs) -> foldl f (f x acc) x
 
 ---
 
@@ -275,16 +275,16 @@ als
 ### Beispiel
 
 	let bewertungFold (evs : Ereignisse seq) =
-		let zaehle (anz, sum) =
-			function
-			| Bewertet (_, b) -> (anz + 1, sum + decimal b.Int)
-			| _               -> (anz, sum)
-		Seq.fold zaehle (0, 0m) evs
-		|> (fun (anz, sum) ->
-			if anz > 0 then
-				sum / decimal anz
-			else
-                0m)
+	  let zaehle (anz, sum) =
+	    function
+		| Bewertet (_, b) -> (anz + 1, sum + decimal b.Int)
+		| _               -> (anz, sum)
+	  Seq.fold zaehle (0, 0m) evs
+	  |> (fun (anz, sum) ->
+        if anz > 0 then
+	      sum / decimal anz
+	    else
+	      0m)
 				
 ' zeigt warum Proj für den Funktor eine gute Idee ist				
 				
@@ -304,181 +304,203 @@ Folds können selbst *generalisiert* werden ... **Catamorphisms**
 
 ---
 
-### Folds abstrahieren
+## Folds abstrahieren
 
-	type Projection<'snap,'event,'result> = {
-		Fold : 'snap -> 'event -> 'snap
-		Proj : 'snap -> 'result
-		Init : 'snap
+	type Projection<'snap, 'event, 'result> = {
+      Fold : 'snap -> Event<'event> -> 'snap
+      Proj : 'snap -> 'result
+      Init : 'snap
+      }
+	
+mit
 
+	type Event<'event> = {
+      Event : 'event
+      Meta  : MetaData
+      }
+
+	type MetaData = {
+      Id        : AggregateId
+      Version   : AggregateVersion
+      }
+	
 ---
 
-### Interface
+## Interface
 
 	type IEventStream<'event> =
-		// ...
-		abstract Read : p:Projection<'snap,'event,'res> -> upper:VersionBound -> 'res
+	  // ...
+      abstract Read : Projection<'snap,'event,'res> -> VersionBound -> 'res
 
 ---
 
-### Kombinatoren
+## Kombinatoren
 
-    let createP f i p : Projection<_,_,_> =
-        { Fold = f
-        ; Init = i
-        ; Proj = p }
+    let createP f i p : Projection<_,_,_> = { 
+	  Fold = fun snap withMeta -> f snap withMeta.Event
+      Init = i
+      Proj = p 
+	  }
 
     let inline sumByP (select : 'event -> 'num option) =
-        createP
-            (fun sum ev ->
-                match select ev with
-                | Some nr -> sum + nr
-                | None    -> sum)
-            LanguagePrimitives.GenericZero
-            id
+	  createP
+	    (fun sum ev ->
+	      match select ev with
+	      | Some nr -> sum + nr
+          | None    -> sum)
+         LanguagePrimitives.GenericZero
+         id
 
     let countByP (select : 'event -> bool) =
-        let toNum = 
-            function 
-            | true  -> Some 1 
-            | false -> None
-        sumByP (select >> toNum)
+	  let toNum = 
+        function 
+        | true  -> Some 1 
+        | false -> None
+      sumByP (select >> toNum)
 
 ---
 
-# DEMO
+## Beispiel
 
----
-
-#### Beispiel
-
-    let anzahlÄnderungen : Projection<_,_,int> = 
-        countByP
-            (function
-            | TitelAktuallisiert _ -> true
-            | _                    -> false)
-
----
-
-### Was fehlt
-
-- Ereignisse werden mehrfach durchlaufen
-- *kombinieren*
+	let anzahlBewertungen : Projection<_,_,int> =
+	  let istBewertet =
+	    function
+	    | Bewertet _ -> true
+	    | _          -> false
+	  countByP istBewertet
 
 ***
 
-## Parallele Projektionen
+# "parallele" Projektionen
 
 ---
 
-### Idee
+## Idee
 
 Übergang zu **Paaren** von *Projektionen*
 
-- Zustand -> Zustand A * Zustand B
+- Zustand → Zustand A * Zustand B
 - komponentenweise `Fold`
 - komponentenweise `Proj`
 
 ---
 
     type Pair<'a,'b> = { 
-        First : 'a
-        Second : 'b 
-        }
+	  First : 'a
+	  Second : 'b 
+    }
 
     let parallelP
-        ( pa : Projection<'sa,'event,'ra>
-        , pb : Projection<'sb,'event,'rb>) 
-        : Projection<Pair<'sa,'sb>,'event,'ra*'rb> =
-        { 
-            Init = { First = pa.Init; Second = pb.Init } 
-            Proj = fun pair -> 
-				(pa.Proj pair.First, pb.Proj pair.Second)
-            Fold = fun pair ev ->
-                let fst = pa.Fold pair.First ev
-                let snd = pb.Fold pair.Second ev
-                { pair with First = fst; Second = snd }
-        }
+	  ( pa : Projection<'sa,'event,'ra>
+      , pb : Projection<'sb,'event,'rb>) 
+      : Projection<Pair<'sa,'sb>,'event,'ra*'rb> =
+	{ 
+	  Init = { First = pa.Init; Second = pb.Init } 
+	  Proj = fun pair -> 
+	    (pa.Proj pair.First, pb.Proj pair.Second)
+	  Fold = fun pair ev ->
+	    let fst = pa.Fold pair.First ev
+	    let snd = pb.Fold pair.Second ev
+	    { pair with First = fst; Second = snd }
+	}
 		
 ---
 
-### Problem
+## Problem
 
 Verlieren etwas die Kontrolle über den *Ergebnis*-Typ
 
+***
+
+# Einschub - Functor
+
 ---
 
-### Funktor
+![Functor](./images/Functor.png)
+
+---
+
+## Beispiele
+
+- Listen mit `List.map`
+- `Option`s mit `Option.map`
+- `type Reader<'src, 'a> = 'src -> 'a` mit `<<`
+
+---
+
+## für Projektionen
 
     let fmap 
-        (f : 'a -> 'b) 
-        (pa : Projection<'s,'event,'a>) 
-        : Projection<'s,'event,'b> =
-        {
-            Init = pa.Init
-            Fold = pa.Fold
-            Proj = pa.Proj >> f
-        }
+	  (f : 'a -> 'b) 
+	  (pa : Projection<'s,'event,'a>) 
+	  : Projection<'s,'event,'b> =
+	  {
+	    Init = pa.Init
+	    Fold = pa.Fold
+	    Proj = pa.Proj >> f
+	  }
 
 ---
 
-#### Beispiel
+## Gesetze
 
-    let zeitraum : Projection<_,_,Zeitraum> = 
-        let von =
-            lastP
-                (function Gestartet t -> Some t | _ -> None)
-                DateTime.MinValue
-        let bis =
-            lastP
-                (function Beendet t -> Some t | _ -> None)
-                DateTime.MinValue
-        parallelP (von, bis)
-        |> fmap (fun (v,b) -> { Von = v; Bis = b })		
----
+- `fmap id = id`
+- `fmap (g << f) = fmap g << fmap f`
 
-# DEMO
+*geschenkt*, weil Funktionen/Komposition
 
 ---
 
-### Vorteile
+## Beispiel
 
-- Projektionen sind kombinierbar
-- Ereignisse werden nur einmal durchlaufen
-
+	let bewertung : Projection<_, Ereignisse, decimal> =
+      parallelP (anzahlBewertungen, summeBewertungen)
+      |> fmap
+        (fun (anz,bew) ->
+           if anz > 0
+           then bew / decimal anz
+           else 0m)	
 ---
 
-### Nachteile
+### damit
 
-	let zusammenfassung' =
-		parallelP (sprecher,
-			parallelP (titel, 
-				parallelP (anzahlÄnderungen, 
-					parallelP (zeitraum,
-						parallelP (bewertung, anzahlBewertungen)))))
-	    |> fmap (fun (s, (t, (anzÄ, (z, (b, anzB))))) ->
-		{
-			Sprecher          = s
-			Titel             = t
-			AnzahlÄnderungen  = anzÄ
-			Zeitraum          = z
-			Bewertung         = b
-			AnzahlBewertungen = anzB
-	    })
+	let filmP =
+		parallelP (titelP,
+			parallelP (genreP, 
+				parallelP (laufzeitP, 
+					parallelP (anzahlP, bewertungenP))))
+	    |> fmap (fun (titel, (genre, (laufz, (anz, bew))))) ->
+	      {
+			Titel             = titel
+			Genre             = genre
+			Laufzeit          = laufz
+			AnzahlBewertungen = anzahl
+			Bewertung         = bewertung
+	      })
 
 ***
 
-## applikativer Funktor
+# Einschug - applikativer Funktor
 
 ---
 
-#### Implementiert
+
+
+![Applicative Functor](./images/ApplFunctor.png)
+
+---
+
+![Pure](./images/Pure.png)
+
+---
+
+## für Projektionen
 
     let pureP value =
         {
-            Init = ()
             Proj = fun _ -> value
-            Fold = (fun _ _ -> ())
+            Init = ()
+            Fold = fun _ _ -> ()
         }
 
     let aMap   
@@ -490,14 +512,14 @@ Verlieren etwas die Kontrolle über den *Ergebnis*-Typ
 		
 ---
 
-#### Operatoren
+## Operatoren
 
     let (<*>) = aMap
-    let (<*) f a = (pureP f) <*> a
+    let (<*) f a = (pureP f) <*> a // ($) really
 
 ---
 
-### Idee
+## Idee
 
 - bringe eine Funktion `f` in *Curry*-Form mit `pureP f` in eine Projektion
 - reduziere deren *Stelligkeit* mittels `aMap` der Reihe nach durch *Argument-Projektionen*
@@ -544,10 +566,6 @@ dann ist
         <*> bewertung <*> anzahlBewertungen
 		
 		
----
-
-# DEMO
-
 ***
 
 ## Snapshots
@@ -685,10 +703,6 @@ damit hat `bewertung` den Typ
 	        Summe<AnzahlBewertungen,int> 
 		>
 	>
-
----
-
-# DEMO
 
 ***
 
