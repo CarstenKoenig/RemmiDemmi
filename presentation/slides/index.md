@@ -484,13 +484,15 @@ Verlieren etwas die Kontrolle über den *Ergebnis*-Typ
 
 ---
 
-
-
-![Applicative Functor](./images/ApplFunctor.png)
+![Pure](./images/Pure.png)
 
 ---
 
-![Pure](./images/Pure.png)
+![Applicative Functor](./images/ApplFunctor.png)
+
+' Beispiele Analog Functor
+' Kein appl. Funktor: (r,_) wegen pure
+' für Listen gibt es mehrere Möglichkeiten
 
 ---
 
@@ -516,6 +518,15 @@ Verlieren etwas die Kontrolle über den *Ergebnis*-Typ
 
     let (<*>) = aMap
     let (<*) f a = (pureP f) <*> a // ($) really
+	
+---
+
+## Gesetze
+
+- `pure id <*> x = x` (id)
+- `pure f <*> pure x = pure (f x)` (Hom)
+- `f <*> pure x = pure (fun \f -> f x) <*> f`
+- `pure (<<) <*> f <*> g <*> x = f <*> (g <*> x)` (Comp)
 
 ---
 
