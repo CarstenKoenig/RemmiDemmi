@@ -530,6 +530,16 @@ Verlieren etwas die Kontrolle über den *Ergebnis*-Typ
 
 ---
 
+## ... ähm
+
+    pure id <*> (proj : Projection<'s,'e,'r>)
+	= aMap (pure id) proj
+	: Projection<Pair<(),'s>,'e,'r)
+	
+Typen stimmen nicht - `(id)` Gesetz verletzt
+
+---
+
 ## Idee
 
 - bringe eine Funktion `f` in *Curry*-Form mit `pureP f` in eine Projektion
