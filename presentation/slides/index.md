@@ -119,17 +119,49 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
 
 ***
 
-' sollte ich vermutlich weglassen
+# OOP-ish Ansatz
 
-## warum nicht *LINQ*?
+---
 
-d.h. Funktionen aus `Seq` bzw. `List` Modul benutzen
+## OOP-ish Ansatz
 
-	let bewertung =
-	  beispielEvents
-	  |> Seq.choose (function Bewertet (_,b) -> Some (decimal b.Int) | _ -> None)
-	  |> Seq.average
+- *Aggregate* als Klasse mit Zustand
+- *Apply*-Funktion
+- `Seq.*`
 
+---
+
+	type FilmAggregate (state : Film, bewertungen : decimal list) =
+
+      member __.Apply (ev : Ereignisse) =
+        match ev with
+        | FilmAngelegt (titel, genre) ->
+            let state' = { state with Titel = titel
+                                      Genre = genre }
+            FilmAggregate (state', bewertungen)
+        | LaufzeitHinzugefuegt laufzeit ->
+            let state' = { state with Laufzeit = laufzeit }
+            FilmAggregate (state', bewertungen)
+        | Bewertet (_, sterne) ->
+            let bewertungen' = decimal sterne.Int :: bewertungen
+            let state' = { state with AnzahlBewertungen = bewertungen'.Length
+                                      Bewertung = bewertungen' |> Seq.average }
+            FilmAggregate (state', bewertungen')
+
+      static member Initial =
+        FilmAggregate (emptyFilm, [])
+
+      static member FromEvents =
+        Seq.fold
+           (fun (agg : FilmAggregate) -> agg.Apply)
+           FilmAggregate.Initial
+
+---
+
+## alternativer Ansatz
+
+- Konzentration auf *Fold*/*Projektion*
+- geht das auch *composable*
 
 ***
 
@@ -538,7 +570,7 @@ Verlieren etwas die Kontrolle über den *Ergebnis*-Typ
 	
 Typen stimmen nicht - `(id)` Gesetz verletzt
 
----
+*** 
 
 ## Idee
 
@@ -547,7 +579,7 @@ Typen stimmen nicht - `(id)` Gesetz verletzt
 
 ---
 
-#### ... mit Typen
+## ... mit Typen
 
 Erinnerung:
 
@@ -568,7 +600,7 @@ dann ist
 
 ---
 
-#### Beispiel
+## Beispiel
 
     let zusammenfassungConst s t anzÄ z b anzB =
         {

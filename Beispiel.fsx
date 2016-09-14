@@ -69,6 +69,9 @@ module Filme =
             Bewertung = bewertung
         }
 
+    let emptyFilm =
+        film (Titel "") (Genre "") (Laufzeit 0<Min>) 0 0m
+
 
 let filmId : AggregateId = Guid.NewGuid ()
 
@@ -93,7 +96,37 @@ let beispielStream =
 
 
 //////////////////////////////////////////////////////////////////////
-// Seq
+// OOPish
+
+type FilmAggregate (state : Film, bewertungen : decimal list) =
+
+    member __.State = state
+
+    member __.Apply (ev : Ereignisse) =
+        match ev with
+        | FilmAngelegt (titel, genre) ->
+            let state' = { state with Titel = titel
+                                      Genre = genre }
+            FilmAggregate (state', bewertungen)
+        | LaufzeitHinzugefuegt laufzeit ->
+            let state' = { state with Laufzeit = laufzeit }
+            FilmAggregate (state', bewertungen)
+        | Bewertet (_, sterne) ->
+            let bewertungen' = decimal sterne.Int :: bewertungen
+            let state' = { state with AnzahlBewertungen = bewertungen'.Length
+                                      Bewertung = bewertungen' |> Seq.average }
+            FilmAggregate (state', bewertungen')
+
+    static member Initial =
+        FilmAggregate (emptyFilm, [])
+
+    static member FromEvents =
+        Seq.fold
+           (fun (agg : FilmAggregate) -> agg.Apply)
+           FilmAggregate.Initial
+
+            
+    
 
 let beispielEvents = beispielStream.Events ()
 
