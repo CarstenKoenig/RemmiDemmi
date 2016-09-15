@@ -422,18 +422,24 @@ mit
 	  Second : 'b 
     }
 
+
     let parallelP
-	  ( pa : Projection<'sa,'event,'ra>
-      , pb : Projection<'sb,'event,'rb>) 
-      : Projection<Pair<'sa,'sb>,'event,'ra*'rb> =
+	  ( pa : Projection<'sa, 'event, 'ra>
+      , pb : Projection<'sb, 'event, 'rb>) 
+      : Projection<Pair<'sa,'sb>, 'event, 'ra*'rb> =
 	{ 
 	  Init = { First = pa.Init; Second = pb.Init } 
+	  
 	  Proj = fun pair -> 
-	    (pa.Proj pair.First, pb.Proj pair.Second)
+		  ( pa.Proj pair.First
+		  , pb.Proj pair.Second)
+		
 	  Fold = fun pair ev ->
-	    let fst = pa.Fold pair.First ev
-	    let snd = pb.Fold pair.Second ev
-	    { pair with First = fst; Second = snd }
+		  let fst = pa.Fold pair.First ev
+		  let snd = pb.Fold pair.Second ev
+		  { pair with 
+			  First = fst
+			  Second = snd }
 	}
 		
 ---
@@ -549,7 +555,7 @@ Verlieren etwas die Kontrolle über den *Ergebnis*-Typ
 ## Operatoren
 
     let (<*>) = aMap
-    let (<*) f a = (pureP f) <*> a // ($) really
+    let ( *>) f a = (pureP f) <*> a
 	
 ---
 
@@ -583,55 +589,80 @@ Typen stimmen nicht - `(id)` Gesetz verletzt
 
 Erinnerung:
 
-`aMap : Projecton<_,_,'a->'b> -> Projection<_,_,'a> -> Projection<_,_,'b>`
+    aMap : Projecton<_,_, 'a->'b> -> Projection<_,_, 'a> -> Projection<_,_, 'b>
 
-Wenn jetzt
+---
+
+## ... mit Typen
+
+mit
 
     f : 'a -> ('b -> 'c)
+
+ergibt sich
+
+    pureP f                 : Projection<_, _, 'a -> ('b -> 'c)>
+
+---
+
+## ... mit Typen
+
+mit
+
+    f  : 'a -> ('b -> 'c)
+
     pa : Projection<_,_,'a>
+
+ergibt sich
+
+    pureP f                 : Projection<_, _, 'a -> ('b -> 'c)>
+
+    pureP f <*> pa          : Projection<_, _, 'b -> 'c        >
+
+---
+
+## ... mit Typen
+
+mit
+
+    f  : 'a -> ('b -> 'c)
+    pa : Projection<_,_,'a>
+
     pb : Projection<_,_,'b>
 
-dann ist
+ergibt sich
 
-    pureP f : Projection<_,_,'a->('b->'c)>
-    pureP f <*> pa : Projection<_,_,'b->'c>
-    (pureP f <*> pa) <*> pb : Projection<_,_,'c>
+    pureP f                 : Projection<_, _, 'a -> ('b -> 'c)>
+    pureP f <*> pa          : Projection<_, _, 'b -> 'c        >
 
+    pureP f <*> pa <*> pb   : Projection<_, _, 'c              >
 
 ---
 
 ## Beispiel
 
-    let zusammenfassungConst s t anzÄ z b anzB =
+    let film titel genre laufzeit anzahl bewertung =
         {
-            Sprecher          = s
-            Titel             = t
-            AnzahlÄnderungen  = anzÄ
-            Zeitraum          = z
-            Bewertung         = b
-            AnzahlBewertungen = anzB
+            Titel = titel
+            Genre = genre
+            Laufzeit = laufzeit
+            AnzahlBewertungen = anzahl
+            Bewertung = bewertung
         }
 
-    let zusammenfassung : Projection<_,_,Zusammenfassung> =
-        zusammenfassungConst
-        <* sprecher <*> titel 
-        <*> anzahlÄnderungen <*> zeitraum
-        <*> bewertung <*> anzahlBewertungen
+
+	let filmProjektion : Projection<_, Ereignisse, Film> =
+      film
+		  *>  titel 
+		  <*> genre 
+		  <*> laufzeit 
+		  <*> anzahlBewertungen 
+		  <*> bewertung
 		
 		
 ***
 
-## Snapshots
-
----
-
-### Idee
-
-Der innere *Zustand* der Projektionen
-
-    type Projection<'snapshot,'event,'result> = ...
-	
-**ist** der Snapshot
+# Snapshots
 
 ---
 
@@ -644,12 +675,12 @@ Der innere *Zustand* der Projektionen
 		
 ---
 
-#### neue Schnittstelle
+## Schnittstelle
 
 	type IEventStream =
-		abstract Add           : event:'event -> unit
-		abstract TakeSnapshot  : p:Projection<'s,'e,'r> -> upper:VersionBound -> unit
-		abstract Read          : p:Projection<'s,'e,'r> -> upper:VersionBound -> 'r
+	  // ...
+	  abstract Read          : Projection<'s,'e,'r> -> VersionBound -> 'r
+	  abstract TakeSnapshot  : Projection<'s,'e,'r> -> VersionBound -> unit
 		
 ---
 
@@ -657,9 +688,9 @@ Der innere *Zustand* der Projektionen
 
 ---
 
-### Beispiel
+## Beispiel
 
-    bewertung : Projection<Pair<Pair<unit,int>int>,_,_> = 
+    bewertung : Projection<Pair<Pair<unit,int>, int>,_,_> = 
 	    ...
         fun wert anzahl -> ...
         <* summeBewertungen <*> anzahlBewertungen
@@ -670,7 +701,7 @@ Der innere *Zustand* der Projektionen
 
 ---
 
-### Problem
+## Problem
 
 - wie bei unterschiedlichen **Versionen** vorgehen
 - wie die beiden `int` Unterscheiden?
@@ -679,40 +710,34 @@ Der innere *Zustand* der Projektionen
 
 ### Lösungen Versionen
 
-im `Fold` der Projektion die Version mit übergeben
-
-	type Projection<'s,'event,'result> = {
-		Fold : 's -> 'event * AggregateVersion -> 's
-		Proj : 's -> 'result
-		Init : 's
-		}
-		
----
-
 `Pair<..>` erweitern:
 
-    type Pair<'a,'b> = { 
-        First  : AggregateVersion * 'a
-        Second : AggregateVersion * 'b 
-        }
+	type Pair<'a,'b> = { 
+	  First     : 'a
+      FirstVer  : AggregateVersion
+      Second    : 'b 
+      SecondVer : AggregateVersion
+      }
 
+---
 
 und in `parallelP` nur bei höherer Version *folden*:
 
     let parallelP ... =
         { 
-            Init = ...
-            Proj = ...
-            Fold = fun pair (ev, ver) ->
-                match pair with
-                | { First = (verA,sA); Second = (verB, sB) } -> 
-                    let fst = 
-                        if ver > verA
-                        then (ver, pa.Fold sA (ev, ver))
-                        else (verA, sA)
-                    let snd = ...
-                    in { First = fst; Second = snd }
-        }
+		  Init = ...
+		  Proj = ...
+		  Fold = fun pair ev ->
+		    let fst = 
+			  if ev.Meta.Version > pair.FirstVer
+			  then pa.Fold pair.First ev
+			  else pair.First
+		    let snd = 
+			  if ev.Meta.Version > pair.SecondVer
+			  then pb.Fold pair.Second ev
+			  else pair.Second
+		    in { pair with First = fst; Second = snd }
+      }
 
 ---
 
@@ -744,18 +769,6 @@ und zur Unterschiedung verwenden
             (function
                 | Bewertet _ -> true
                 | _          -> false)
-
-damit hat `bewertung` den Typ
-
-    Projection<
-	    Pair< 
-			Pair< 
-				unit,
-		        Summe<SummeBewertungen,int> 
-			>,
-	        Summe<AnzahlBewertungen,int> 
-		>
-	>
 
 ***
 

@@ -1,12 +1,15 @@
+
 // #r "DemoStore.dll"
 #load "DemoStore.fsx"
 
 open System
 open Definitionen
 
-
+// einfacher InMemory Store (Liste von boxed Ereignissen)
 let eventStore = DemoStore.EventStore.InMemory
 
+//////////////////////////////////////////////////////////////////////
+// Model Filme mit Bewertung
 
 [<Measure>]
 type Min
@@ -86,14 +89,7 @@ let beispielStream =
     stream.Add <| Bewertet ("Susi", DreiSterne)
     stream
 
-
-
-
-
-
-
-
-
+let beispielEvents = beispielStream.Events ()
 
 //////////////////////////////////////////////////////////////////////
 // OOPish
@@ -127,24 +123,6 @@ type FilmAggregate (state : Film, bewertungen : decimal list) =
 
             
     
-
-let beispielEvents = beispielStream.Events ()
-
-
-let bewertung =
-    beispielEvents
-    |> Seq.choose (function Bewertet (_,b) -> Some (decimal b.Int) | _ -> None)
-    |> Seq.average
-
-let titel =
-    beispielEvents
-    |> Seq.choose (function FilmAngelegt (titel, _) -> Some titel | _ -> None)
-    |> Seq.last
-
-
-
-
-
 //////////////////////////////////////////////////////////////////////'event
 // Fold
     
@@ -181,7 +159,31 @@ let bewertungFold (evs : Ereignisse seq) =
 //////////////////////////////////////////////////////////////////////
 // Projektionen
 
-type AnzahlBewertungen = private | AnzahlBewertungen
+let titel : Projection<_, Ereignisse, Titel> =
+  let selectTitel =
+    function
+    | FilmAngelegt (titel, _) -> Some titel
+    | _ -> None
+  Projektionen.lastP selectTitel (Titel "---")
+  
+
+let genre : Projection<_, Ereignisse, Genre> =
+  let selectGenre =
+    function
+    | FilmAngelegt (_, genre) -> Some genre
+    | _ -> None
+  Projektionen.lastP selectGenre (Genre "---")
+  
+
+let laufzeit : Projection<_, Ereignisse, Laufzeit> =
+  let selectLaufzeit =
+    function
+    | LaufzeitHinzugefuegt laufzeit -> Some laufzeit
+    | _ -> None
+  Projektionen.lastP selectLaufzeit (Laufzeit 0<Min>)
+  
+
+type AnzahlBewertungen = AnzahlBewertungen
 let anzahlBewertungen : Projection<_,Ereignisse,int> =
     let istBewertet =
         function
@@ -189,7 +191,7 @@ let anzahlBewertungen : Projection<_,Ereignisse,int> =
         | _          -> false
     Projektionen.countByP AnzahlBewertungen istBewertet
 
-type SummeBewertungen = private | SummeBewertungen
+type SummeBewertungen = SummeBewertungen
 let summeBewertungen : Projection<_,Ereignisse,decimal> =
     let bewertung =
         function
@@ -197,10 +199,16 @@ let summeBewertungen : Projection<_,Ereignisse,decimal> =
         | _              -> None
     Projektionen.sumByP SummeBewertungen bewertung
 
-let bewertungP : Projection<_, Ereignisse, decimal> =
-    Projektionen.parallelP (anzahlBewertungen, summeBewertungen)
-    |> Projektionen.fmapP
+let bewertung : Projection<_, Ereignisse, decimal> =
+    parallelP (anzahlBewertungen, summeBewertungen)
+    |> fmapP
       (fun (anz,bew) ->
          if anz > 0
          then bew / decimal anz
          else 0m)
+
+let filmProjektion : Projection<_, Ereignisse, Film> =
+  film *> titel <*> genre <*> laufzeit <*> anzahlBewertungen <*> bewertung
+
+let useProjection() =
+  beispielStream.Read filmProjektion NoBound

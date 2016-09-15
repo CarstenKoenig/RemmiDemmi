@@ -26,7 +26,8 @@ module Generics =
         Some (args.[0], args.[1], a, b)
 
     let make (ta : Type, tb : Type, oa : obj, ob : obj, va, vb) =
-        genericType.MakeGenericType(ta, tb).GetConstructors().[0].Invoke([|oa; box va; ob; box vb|])
+      // Sadly this does not work in Mono right now
+      genericType.MakeGenericType(ta, tb).GetConstructors().[0].Invoke([|oa; box va; ob; box vb|])
 
     let rec describe (t : System.Type) =
         if not t.IsGenericType then describePrim t else

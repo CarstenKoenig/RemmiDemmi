@@ -72,86 +72,71 @@ type Labeled<'lable,'a> = Labeled of 'a
 type Summe<'label,'a> = Summe of 'a
 
 
+let createP f i p : Projection<_,_,_> = {
+  Fold = fun snap withMeta -> f snap withMeta.Event
+  Init = i
+  Proj = p
+  }
+
+
+let fmapP 
+  (f : 'a -> 'b) 
+  (pa : Projection<'s,'event,'a>) 
+  : Projection<'s,'event,'b> =
+  {
+    Init = pa.Init
+    Fold = pa.Fold
+    Proj = pa.Proj >> f
+  }
+
+
+let parallelP
+  ( pa : Projection<'sa,'event,'ra>
+  , pb : Projection<'sb,'event,'rb>) 
+  : Projection<Pair<'sa,'sb>,'event,'ra*'rb> =
+  { 
+    Init = 
+      {
+        First  = pa.Init
+        FirstVer = 0
+        Second = pb.Init 
+        SecondVer = 0
+      } 
+    Proj = function { First = sA; Second = sB } -> (pa.Proj sA, pb.Proj sB)
+    Fold = fun pair ev ->
+        let fst = 
+          if ev.Meta.Version > pair.FirstVer
+          then pa.Fold pair.First ev
+          else pair.First
+        let snd = 
+          if ev.Meta.Version > pair.SecondVer
+          then pb.Fold pair.Second ev
+          else pair.Second
+        in { pair with First = fst; Second = snd }
+      }
+
+
+let pureP value =
+  {
+    Init = ()
+    Proj = fun _ -> value
+    Fold = (fun _ _ -> ())
+  }
+
+
+let applictiveMapP   
+  (pf : Projection<'sf,'event,'a -> 'b>) 
+  (pa : Projection<'sa,'event,'a>) 
+  : Projection<Pair<'sf,'sa>,'event,'b> =
+    parallelP (pf, pa)
+    |> fmapP (fun (f,a) -> f a)
+
+
+let (<*>) = applictiveMapP
+let ( *>) f a = (pureP f) <*> a
+
+
 module Projektionen =
-
-    let createP f i p : Projection<_,_,_> = {
-        Fold = fun snap withMeta -> f snap withMeta.Event
-        Init = i
-        Proj = p
-        }
-
-
-    let fmapP 
-        (f : 'a -> 'b) 
-        (pa : Projection<'s,'event,'a>) 
-        : Projection<'s,'event,'b> =
-        {
-            Init = pa.Init
-            Fold = pa.Fold
-            Proj = pa.Proj >> f
-        }
-
-
-    let parallelP
-        ( pa : Projection<'sa,'event,'ra>
-        , pb : Projection<'sb,'event,'rb>) 
-        : Projection<Pair<'sa,'sb>,'event,'ra*'rb> =
-        { 
-            Init = 
-                { First  = pa.Init
-                ; FirstVer = 0
-                ; Second = pb.Init 
-                ; SecondVer = 0} 
-            Proj = function 
-                | { First = sA; Second = sB } -> 
-                    (pa.Proj sA, pb.Proj sB)
-            Fold = fun pair ev ->
-                match pair with
-                | { First = sA; FirstVer = verA; Second = sB; SecondVer = verB } -> 
-                    let fst = 
-                        if ev.Meta.Version > verA
-                        then pa.Fold sA ev
-                        else sA
-                    let snd = 
-                        if ev.Meta.Version > verB
-                        then pb.Fold sB ev
-                        else sB
-                    in { pair with First = fst; Second = snd }
-        }
-
-
-    let pureP value =
-        {
-            Init = ()
-            Proj = fun _ -> value
-            Fold = (fun _ _ -> ())
-        }
-
-
-    let applictiveMapP   
-        (pf : Projection<'sf,'event,'a -> 'b>) 
-        (pa : Projection<'sa,'event,'a>) 
-        : Projection<Pair<'sf,'sa>,'event,'b> =
-        parallelP (pf, pa)
-        |> fmapP (fun (f,a) -> f a)
-
-
-    let (<*>) = applictiveMapP
-
-
-    let (<*) f a = (pureP f) <*> a
-
-
-    let firstP (select : 'event -> 'result option) (defResult : 'result) =
-        let orElse alt opt = 
-            match opt with
-            | Some _ -> opt
-            | None   -> alt
-        createP 
-            (fun opt ev -> opt |> orElse (select ev))
-            None
-            (function Some r -> r | None -> defResult)
-
 
     let lastP (select : 'event -> 'result option) (defResult : 'result) =
         let orElse alt opt = 
@@ -200,4 +185,4 @@ module Projektionen =
             function 
             | true -> Some 1 
             | false -> None
-        sumByP label (select >> toNum)        
+        sumByP label (select >> toNum)
