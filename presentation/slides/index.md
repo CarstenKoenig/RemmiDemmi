@@ -9,7 +9,11 @@
 ##
 
 # Eventsourcing mit F#
-Carsten König
+
+## Carsten König
+
+- Slides: [carstenkoenig.github.io/RemmiDemmi](https://carstenkoenig.github.io/RemmiDemmi/#/)
+- Code: [github.com/CarstenKoenig/RemmiDemmi](https://github.com/CarstenKoenig/RemmiDemmi)
 
 ***
 
@@ -779,3 +783,7 @@ und zur Unterschiedung verwenden
 - Twitter: [CarstenK_dev](https://twitter.com/CarstenK_dev)
 - Email:   [Carsten@gettingsharper.de](mailto:Carsten@gettingsharper.de)
 - Web:     [gettingsharper.de](gettingsharper.de)
+
+- Slides: [carstenkoenig.github.io/RemmiDemmi](https://carstenkoenig.github.io/RemmiDemmi/#/)
+- Code: [github.com/CarstenKoenig/RemmiDemmi](https://github.com/CarstenKoenig/RemmiDemmi)
+

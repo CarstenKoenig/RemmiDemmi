@@ -243,6 +243,7 @@ ModelManifest.xml
 
 # FsReveal
 presentation/output/
+presentation/temp/
 
 *.zip
 *.dll
