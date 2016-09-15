@@ -12,7 +12,7 @@
 let gitOwner = "CarstenKoenig"
 let gitHome = "https://github.com/" + gitOwner
 // The name of the project on GitHub
-let gitProjectName = "RemmiDemmi2016"
+let gitProjectName = "RemmiDemmi"
 
 
 open FsReveal
