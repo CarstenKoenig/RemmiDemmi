@@ -17,17 +17,22 @@
 
 ***
 
-# Was ist Eventsourcing
+# Eventsourcing?
+
+' - Speichern von Zuständen
+' - "funktionale" Datenbank
 
 ---
 
-## Eventsourcing
+## Eventsourcing?
 
 nicht der **Zustand**
 
 sondern die **Ereignisse**
 
 die zu diesem Zustand geführt haben werden gespeichert.
+
+' - also der Weg zum Zustand
 
 ---
 
@@ -41,37 +46,70 @@ Speichern des aktuellen **Zustands = Guthaben**
 
 > jetzt beträgt ihr Guthaben `15€`
 
+' ich glaube so funktioniert das auf der Bank nicht
+
 ---
 
 ## Ereignisse
 
-Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
+werden **Ereignisse** gespeichert
 
+- am `01.01` wurde das Konto `Eröffnet`
 - am `01.01` erfolgte eine `Einzahlung` von `50€`
 - am `02.01` erfolgte eine `Auszahlung` von `40€`
 - am `03.01` erfolgte eine `Einzahlung` von `5€`
 - ...
 
+' kann schon eher sein ... so in etwa
+
+---
+
+## Dabei
+
+Werden Ereignisse *nur* **angehängt**
+
+---
+
+## Dabei
+
+Werden Ereignisse **nie** *gelöscht* oder *geändert*
+
+' bei Fehlern also Ausgleichsbuchungen
+
 ---
 
 ## Begriffe
 
-- **Aggregate**  = das Domänen-Objekt für das wir uns interessieren (*Konto*)
-- **Event**      = beschreibt eine erfolgte Änderung an einem Aggregat (*Ein-/Auszahlungen*)
+- **Aggregate**  = das *Domänen-Objekt* für das wir uns interessieren (*Konto*)
+- **Event**      = beschreibt eine **erfolgte** Änderung an einem Aggregat (*Ein-/Auszahlungen*)
 - **Stream**     = Abfolge von Ereignissen eines bestimmten Aggregats
 - **Projektion** = Berechnen eines Zustands aus den Ereignissen eines Aggregats
 - **Snapshot**   = gespeicherter Zustand
+
+' - so verwende ich das hier
+' - Snapshot: 
+'   - nützlich wenn sehr viele Ereignisse per Aggregat
+'   - Speichert kummulierten Zustand, damit nur Ereignisse ab dort benutzt werden müssen
+'   - wird hier Abhängig von Projektionen sein
 
 ---
 
 ## Heute geht es um ...
 
-- Wie bekomme ich **Zustand** aus **Ereignissen**?
-- Wie mit **Snapshots** umgehen?
+Wie bekomme ich **Zustand** aus **Ereignissen**?
+
+' - also wie Ereignisse persistiert werden
+' - Im Code einfach mit Object-Listen
+' - Funktioniert im Prinzip in dem box/unbox mit To/FromJson ersetzt wird
+' - Vorsicht: ziemlich übler Reflection-Code
+' - ... funktioniert nicht unter Mono
 
 ***
 
 # Szenario
+
+' - Filme und Bewertungen
+' - zu Remmi Demmi ist mir jetzt nur das eingefallen
 
 ---
 
@@ -80,7 +118,7 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
 - Titel: *Project X*
 - Genre: *Comedy*
 - Laufzeit: *88min*
-- Bewertung: *2*
+- Bewertung: *2/3*
 
 (Quelle: [IMDb](http://www.imdb.com/title/tt1636826/?ref_=nv_sr_1))
 
@@ -98,9 +136,11 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
 	  | ZweiSterne 
 	  | DreiSterne
 		
+' vielleicht Laufzeit später hinzugefügt
+
 ---
 
-## Zustand
+## Projektionen
 
 - Was ist der **Titel** des Films?
 - Wie sieht die **Durchschnittsbewertung** aus?
@@ -113,25 +153,38 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
     type Film =
 	  {
 	    Titel : Titel
-		Genre : Genre
-		Laufzeit : Laufzeit
-		Bewertung : decimal
-		AnzahlBewertungen : int
+	    Genre : Genre
+	    Laufzeit : Laufzeit
+	    Bewertung : decimal
+	    AnzahlBewertungen : int
 	  }
+	  
+' aus Einzelkomponenten
 
 ---
 
 ***
 
-# OOP-ish Ansatz
+# "klassischer" Ansatz
 
 ---
 
-## OOP-ish Ansatz
+## OO-ish
 
-- *Aggregate* als Klasse mit Zustand
-- *Apply*-Funktion
-- `Seq.*`
+- *Aggregate* = Klasse mit Zustand
+- *Apply* - Methode
+- `Seq.*` Funktionen
+
+---
+
+	type FilmAggregate (state : Film, bewertungen : decimal list) =
+
+      static member Initial =
+        FilmAggregate (emptyFilm, [])
+
+' Zustand: Film-Objekt und eine Liste mit Bewertungen
+' `Film` alleine reicht nicht
+' könnte man auch *mutable* machen
 
 ---
 
@@ -143,33 +196,49 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
             let state' = { state with Titel = titel
                                       Genre = genre }
             FilmAggregate (state', bewertungen)
-        | LaufzeitHinzugefuegt laufzeit ->
+      
+	    | LaufzeitHinzugefuegt laufzeit ->
             let state' = { state with Laufzeit = laufzeit }
             FilmAggregate (state', bewertungen)
-        | Bewertet (_, sterne) ->
+        
+	    | Bewertet (_, sterne) ->
             let bewertungen' = decimal sterne.Int :: bewertungen
             let state' = { state with AnzahlBewertungen = bewertungen'.Length
-                                      Bewertung = bewertungen' |> Seq.average }
+                                      Bewertung = Seq.average bewertungen' }
             FilmAggregate (state', bewertungen')
 
-      static member Initial =
-        FilmAggregate (emptyFilm, [])
 
-      static member FromEvents =
+' Funktion zum *anwenden" eines Ereignissen
+
+---
+
+	type FilmAggregate (state : Film, bewertungen : decimal list) =
+
+      static member FromEvents : Ereignisse seq -> FilmAggregate =
         Seq.fold
            (fun (agg : FilmAggregate) -> agg.Apply)
            FilmAggregate.Initial
+		   
+' im wesentlichen Fold
+' hier wären wir fertig - Aggregate als Snapshot
+' es gibt einen alternativen Ansatz
+
+---
+
+# Demo
 
 ---
 
 ## alternativer Ansatz
 
 - Konzentration auf *Fold*/*Projektion*
-- geht das auch *composable*
+- diese *kombinierbar* machen
 
 ***
 
-# Einschub - Folds
+# Folds
+
+' ein Schnelleinführung wie Folds funktionieren bzw. hergeleitet werden können
 
 ---
 
@@ -177,6 +246,10 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
 	  match xs with
 	  | []      -> 0
 	  | (_::xs) -> 1 + length xs
+	  
+' Teile vorstellen:
+' - Aufbau ein Fall per Konstruktor
+' - rekursiver Aufruf innerhalb einer Funktion
 
 ---
 
@@ -184,7 +257,6 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
 	  match xs with
 	  | []      -> 0
 	  | (x::xs) -> x + sum xs
-
 
 ---
 
@@ -197,16 +269,19 @@ Werden die **Ereignisse = Ein- und Auszahlungen** gespeichert
 
 ## Muster
 
-    let rec F (xs : 'a list) =
+    let rec fold f init xs =
 	  match xs with
 	  | []      -> init
-	  | (x::xs) -> f x (F xs)
+	  | (x::xs) -> f x (fold f init xs)
 		
 mit
 
-    init : 's
-	F : 'a list -> 's
-	f : 'a -> 's -> 's
+	f           : 'a -> 's -> 's
+    init        : 's
+    xs          : 'a list
+	fold f init : 'a list -> 's
+	
+' - Versuch Typen herzuleiten
 
 ---		
 
@@ -214,14 +289,12 @@ mit
 
     let rec length (xs : 'a list) =
 	  match xs with
-	  | []      -> init
-	  | (x::xs) -> f x (length xs)
+	  | []      -> 0
+	  | (x::xs) -> 1 + (length xs)
 		
-mit
+also
 
-    's ~ int
-    init = 0
-	f x s = 1 + s
+	length = fold (fun x s -> 1+s) 0
 
 ---		
 
@@ -229,14 +302,12 @@ mit
 
     let rec sum (xs : int list) =
 	  match xs with
-	  | []      -> init
-	  | (x::xs) -> f x (sum xs)
+	  | []      -> 0
+	  | (x::xs) -> x + (sum xs)
 		
-mit
-
-    's ~ int
-    init = 0
-	f x s = x + s
+also
+	
+	sum = fold (fun x s -> x+s) 0
 
 ---		
 
@@ -244,15 +315,13 @@ mit
 
     let rec map (g : 'a -> 'b) (xs : 'a list) =
 	  match xs with
-	  | []      -> init
-	  | (x::xs) -> f x (map g xs)
+	  | []      -> []
+	  | (x::xs) -> g x :: (map g xs)
 		
-mit
+also
 
-    's ~ 'b list
-    init = []
-	f x s = g x :: s
-
+    map g = fold (fun x s -> g x :: s) []
+	
 ---
 
 ## FoldR
@@ -261,15 +330,6 @@ mit
 
 - Ersetze alle *cons* durch eine Funktion
 - Ersetze `[]` durch einen passenden Wert
-
----
-
-## Code
-
-	let rec foldr f init xs = 
-	  match xs with
-	  | []      -> init
-	  | (x::xs) -> f x (foldr f xs)
 
 ---
 
@@ -286,6 +346,8 @@ kann durch
 	 
 dargestellt werden	 
 
+' ziemlich offensichtlich oder?
+
 ---
 
 ## LeftFold
@@ -296,6 +358,12 @@ dargestellt werden
 	  match xs with
 	  | []      -> acc
 	  | (x::xs) -> foldl f (f x acc) x
+	  
+' - viel nützlicher für *strikte* Sprachen
+' - also auch F#
+' - benutzt einen Akkumulator
+' - dieser Akkumulator **ist der Snapshot**
+' - schöne Übung: foldl durch foldr und cont
 
 ---
 
@@ -338,9 +406,12 @@ Folds können selbst *generalisiert* werden ... **Catamorphisms**
 
 # Projektionen
 
+' - Bestandteile des Fold in Datentyp
+' - diesen komponierbar machen
+
 ---
 
-## Folds abstrahieren
+## Datentypen...
 
 	type Projection<'snap, 'event, 'result> = {
       Fold : 'snap -> Event<'event> -> 'snap
@@ -359,6 +430,8 @@ mit
       Id        : AggregateId
       Version   : AggregateVersion
       }
+	  
+' Metadaten nach belieben erweitern (Zeitstempel, ...)
 	
 ---
 
@@ -367,6 +440,9 @@ mit
 	type IEventStream<'event> =
 	  // ...
       abstract Read : Projection<'snap,'event,'res> -> VersionBound -> 'res
+
+' statt Ereignisse zu liefern - überlasse ich den Stream den Fold
+' außer `Seq.fold` sparen noch nicht viel gewonnen
 
 ---
 
@@ -378,6 +454,10 @@ mit
       Proj = p 
 	  }
 
+---
+
+## Kombinatoren
+
     let inline sumByP (select : 'event -> 'num option) =
 	  createP
 	    (fun sum ev ->
@@ -387,6 +467,10 @@ mit
          LanguagePrimitives.GenericZero
          id
 
+---
+
+## Kombinatoren
+
     let countByP (select : 'event -> bool) =
 	  let toNum = 
         function 
@@ -394,20 +478,25 @@ mit
         | false -> None
       sumByP (select >> toNum)
 
+' bauen also die Funktionen aus `Seq`-Modul nach
+' **Basis**-Bausteine
+
 ---
 
 ## Beispiel
 
 	let anzahlBewertungen : Projection<_,_,int> =
-	  let istBewertet =
+	  let istBewertung =
 	    function
 	    | Bewertet _ -> true
 	    | _          -> false
-	  countByP istBewertet
+	  countByP istBewertung
 
 ***
 
 # "parallele" Projektionen
+
+' Ziel: mehrere Projektionen mit nur einem Durchlauf
 
 ---
 
@@ -446,15 +535,19 @@ mit
 			  Second = snd }
 	}
 		
+' auf den Ausgabe-Typ hinweisen
+
 ---
 
 ## Problem
 
 Verlieren etwas die Kontrolle über den *Ergebnis*-Typ
 
+' Math for the win: Funktor Muster
+
 ***
 
-# Einschub - Functor
+# Funktor
 
 ---
 
@@ -520,9 +613,12 @@ Verlieren etwas die Kontrolle über den *Ergebnis*-Typ
 			Bewertung         = bewertung
 	      })
 
+' Kombonierbar: check
+' Leserlich/Ease of use ... 
+
 ***
 
-# Einschug - applikativer Funktor
+# applikativer Funktor
 
 ---
 
@@ -587,13 +683,15 @@ Typen stimmen nicht - `(id)` Gesetz verletzt
 - bringe eine Funktion `f` in *Curry*-Form mit `pureP f` in eine Projektion
 - reduziere deren *Stelligkeit* mittels `aMap` der Reihe nach durch *Argument-Projektionen*
 
+' wie hilft das jetzt mit der Lesbarkeit/Ease of Use?
+
 ---
 
 ## ... mit Typen
 
 Erinnerung:
 
-    aMap : Projecton<_,_, 'a->'b> -> Projection<_,_, 'a> -> Projection<_,_, 'b>
+    aMap : Projecton<_,_, 'a -> 'b> -> Projection<_,_, 'a> -> Projection<_,_, 'b>
 
 ---
 
@@ -664,6 +762,10 @@ ergibt sich
 		  <*> bewertung
 		
 		
+---
+
+# Demo
+
 ***
 
 # Snapshots
@@ -747,7 +849,7 @@ und in `parallelP` nur bei höherer Version *folden*:
 
 ### Lösung doppel-`int`
 
-**Phantomtypen** einführen
+mit Typen *labeln*:
 
     type Summe<'label,'a> = Summe of 'a
 
@@ -773,6 +875,10 @@ und zur Unterschiedung verwenden
             (function
                 | Bewertet _ -> true
                 | _          -> false)
+
+---
+
+# Demo
 
 ***
 

@@ -1,20 +1,18 @@
-
-// #r "DemoStore.dll"
-#load "DemoStore.fsx"
+#r "DemoStore.dll"
+// #load "DemoStore.fsx"
 
 open System
 open Definitionen
 
-// einfacher InMemory Store (Liste von boxed Ereignissen)
-let eventStore = DemoStore.EventStore.InMemory
 
 //////////////////////////////////////////////////////////////////////
 // Model Filme mit Bewertung
 
+// Minuten
 [<Measure>]
 type Min
 
-
+// Filme-Model / Ereignisse
 [<AutoOpen>]
 module Filme =
 
@@ -76,6 +74,21 @@ module Filme =
         film (Titel "") (Genre "") (Laufzeit 0<Min>) 0 0m
 
 
+
+
+
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////
+// Beispieldaten:
+
+// einfacher InMemory Store (Liste von boxed Ereignissen)
+let eventStore = DemoStore.EventStore.InMemory
+
+
 let filmId : AggregateId = Guid.NewGuid ()
 
 
@@ -89,10 +102,30 @@ let beispielStream =
     stream.Add <| Bewertet ("Susi", DreiSterne)
     stream
 
+
 let beispielEvents = beispielStream.Events ()
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 //////////////////////////////////////////////////////////////////////
-// OOPish
+// OO-ish
 
 type FilmAggregate (state : Film, bewertungen : decimal list) =
 
@@ -121,45 +154,24 @@ type FilmAggregate (state : Film, bewertungen : decimal list) =
            (fun (agg : FilmAggregate) -> agg.Apply)
            FilmAggregate.Initial
 
+
+// Aggregate auslesen:
+let aggregate = FilmAggregate.FromEvents beispielEvents
+aggregate.State
             
     
-//////////////////////////////////////////////////////////////////////'event
-// Fold
-    
-let titelRec (evs : Ereignisse list) : Titel = 
-   let rec letzterTitel aktTitel =
-       function
-        | []                        -> aktTitel
-        | FilmAngelegt (t,_) :: evs -> letzterTitel t evs
-        | _                  :: evs -> letzterTitel aktTitel evs
-   letzterTitel (Titel "---") evs
 
 
-let titelFold (evs : Ereignisse seq) : Titel = 
-    let updateTitel aktTitel =
-       function
-        | FilmAngelegt (t,_) -> t
-        | _                  -> aktTitel
-    Seq.fold updateTitel (Titel "---") evs
 
 
-let bewertungFold (evs : Ereignisse seq) =
-    let zaehle (anz, sum) =
-        function
-        | Bewertet (_, b) -> (anz + 1, sum + decimal b.Int)
-        | _               -> (anz, sum)
-    Seq.fold zaehle (0, 0m) evs
-    |> (fun (anz, sum) ->
-           if anz > 0 then
-              sum / decimal anz
-           else
-              0m)
+
+
 
 
 //////////////////////////////////////////////////////////////////////
 // Projektionen
 
-let titel : Projection<_, Ereignisse, Titel> =
+let titel : Projection<_, _, Titel> =
   let selectTitel =
     function
     | FilmAngelegt (titel, _) -> Some titel
@@ -167,7 +179,7 @@ let titel : Projection<_, Ereignisse, Titel> =
   Projektionen.lastP selectTitel (Titel "---")
   
 
-let genre : Projection<_, Ereignisse, Genre> =
+let genre : Projection<_, _, Genre> =
   let selectGenre =
     function
     | FilmAngelegt (_, genre) -> Some genre
@@ -175,7 +187,7 @@ let genre : Projection<_, Ereignisse, Genre> =
   Projektionen.lastP selectGenre (Genre "---")
   
 
-let laufzeit : Projection<_, Ereignisse, Laufzeit> =
+let laufzeit : Projection<_, _, Laufzeit> =
   let selectLaufzeit =
     function
     | LaufzeitHinzugefuegt laufzeit -> Some laufzeit
@@ -184,22 +196,24 @@ let laufzeit : Projection<_, Ereignisse, Laufzeit> =
   
 
 type AnzahlBewertungen = AnzahlBewertungen
-let anzahlBewertungen : Projection<_,Ereignisse,int> =
+let anzahlBewertungen : Projection<_, _, int> =
     let istBewertet =
         function
         | Bewertet _ -> true
         | _          -> false
     Projektionen.countByP AnzahlBewertungen istBewertet
 
+
 type SummeBewertungen = SummeBewertungen
-let summeBewertungen : Projection<_,Ereignisse,decimal> =
+let summeBewertungen : Projection<_, _, decimal> =
     let bewertung =
         function
         | Bewertet (_,b) -> Some (decimal b.Int)
         | _              -> None
     Projektionen.sumByP SummeBewertungen bewertung
 
-let bewertung : Projection<_, Ereignisse, decimal> =
+
+let bewertung : Projection<_, _, decimal> =
     parallelP (anzahlBewertungen, summeBewertungen)
     |> fmapP
       (fun (anz,bew) ->
@@ -207,8 +221,34 @@ let bewertung : Projection<_, Ereignisse, decimal> =
          then bew / decimal anz
          else 0m)
 
+
 let filmProjektion : Projection<_, Ereignisse, Film> =
   film *> titel <*> genre <*> laufzeit <*> anzahlBewertungen <*> bewertung
 
-let useProjection() =
-  beispielStream.Read filmProjektion NoBound
+
+beispielStream.Read filmProjektion NoBound
+
+
+
+
+
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////
+// mit Snapshots
+
+beispielStream.TakeSnapshot filmProjektion NoBound
+
+
+beispielStream.Add (Bewertet ("Carsten", DreiSterne))
+beispielStream.TakeSnapshot filmProjektion NoBound
+
+
+beispielStream.Add (LaufzeitHinzugefuegt (Laufzeit 90<Min>))
+beispielStream.TakeSnapshot laufzeit NoBound
+
+
+beispielStream.Read filmProjektion NoBound
